@@ -59,6 +59,25 @@ Each PR gets exactly **one** type, so an engineer's mix sums to 100%. The dashbo
 engineer's mix as a **donut + top-2 summary** ("Mostly Feature & Bug Fix"), and a team-wide
 **"What the team shipped"** strip gives the leader an at-a-glance picture of where effort went.
 
+## Benchmarking & trends
+
+Impact is only meaningful relative to peers and over time, so the dashboard adds:
+
+- **Benchmark framing** — each engineer is labelled by where they sit in the distribution
+  ("Rank #1 · Top 1%"), and every impact-breakdown bar shows reference ticks for the team
+  **median (50th)** and **top 10% (90th)** percentile, so "good" has an explicit yardstick.
+- **13-week activity trend** — a per-engineer sparkline plus a normalised **PRs / week** rate,
+  so a leader sees consistency and momentum, not just a 90-day total.
+
+## Future work (with richer data)
+
+The most valuable extension, and the natural next step for an engineering-intelligence tool,
+is **AI vs. human contribution** — attributing how much of each engineer's output was
+AI-assisted (Cursor / Copilot / Claude). That can't be inferred reliably from public GitHub
+data alone (it needs commit co-author trailers or editor telemetry), so rather than guess, it
+is intentionally left out here. With that signal, the same percentile/benchmark approach would
+extend cleanly to an "augmented output" dimension.
+
 ## Architecture
 
 ```mermaid

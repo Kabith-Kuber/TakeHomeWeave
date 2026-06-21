@@ -88,6 +88,7 @@ export default function App() {
 
   const sel = ranked.find((e) => e.login === selected) || top5[0];
   const selRank = ranked.findIndex((e) => e.login === sel.login) + 1;
+  const selTopPct = Math.max(1, Math.round((selRank / ranked.length) * 100));
   const m = data.meta;
 
   return (
@@ -201,12 +202,21 @@ export default function App() {
                 {sel.login}
               </a>
               <div className="detail-sub">
-                Rank #{selRank} · Impact score {Math.round(sel.liveScore)} / 100
+                Rank #{selRank} · <span className="bench">Top {selTopPct}%</span> · Impact score{" "}
+                {Math.round(sel.liveScore)} / 100
               </div>
               <div className="detail-quick">
                 {sel.stats.prCount} PRs · {sel.stats.reviewsGiven} reviews given ·{" "}
                 {sel.stats.reviewsReceived} received · {sel.stats.subsystemCount} subsystems
               </div>
+            </div>
+            <div className="trend">
+              <div className="trend-top">
+                <span className="trend-num">{sel.stats.perWeek}</span>
+                <span className="trend-unit">PRs / wk</span>
+              </div>
+              <Sparkline data={sel.weekly} />
+              <div className="trend-cap">activity · last 13 weeks</div>
             </div>
           </div>
 
@@ -226,12 +236,15 @@ export default function App() {
                         background: d.color,
                       }}
                     />
+                    <span className="tick" style={{ left: "50%" }} />
+                    <span className="tick" style={{ left: "90%" }} />
                   </div>
                   <span className="bd-annot">{ANNOT[d.key](sel)}</span>
                 </div>
               ))}
               <p className="note">
-                Bars = percentile vs. the {m.qualifiedContributors} ranked contributors.
+                Bars = percentile vs. the {m.qualifiedContributors} ranked contributors. Ticks
+                mark the team <b>median</b> and <b>top 10%</b>.
               </p>
             </div>
 
@@ -313,6 +326,25 @@ function TeamMix({ mix }) {
         ))}
       </div>
     </div>
+  );
+}
+
+function Sparkline({ data, w = 150, h = 38 }) {
+  const max = Math.max(...data, 1);
+  const n = data.length;
+  const step = n > 1 ? w / (n - 1) : w;
+  const pad = 3;
+  const y = (v) => h - pad - (v / max) * (h - pad * 2);
+  const pts = data.map((v, i) => [i * step, y(v)]);
+  const line = pts.map((p) => p.join(",")).join(" ");
+  const area = `0,${h} ${line} ${w},${h}`;
+  const last = pts[pts.length - 1];
+  return (
+    <svg className="spark" width={w} height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+      <polygon points={area} className="spark-area" />
+      <polyline points={line} className="spark-line" fill="none" />
+      {last && <circle cx={last[0]} cy={last[1]} r="2.4" className="spark-dot" />}
+    </svg>
   );
 }
 

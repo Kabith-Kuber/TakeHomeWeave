@@ -21,6 +21,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 
 const MIN_PRS = 3; // a contributor must have >=3 merged PRs to be ranked
+const NWEEKS = 13; // ~90 days of weekly activity buckets (Workweave-style trend)
 const DEFAULT_WEIGHTS = {
   shipping: 0.25,
   collaboration: 0.25,
@@ -145,6 +146,10 @@ async function main() {
   const raw = JSON.parse(await readFile(join(ROOT, "data", "raw-prs.json"), "utf8"));
   const { meta, prs } = raw;
 
+  const fromMs = new Date(meta.from + "T00:00:00Z").getTime();
+  const weekOf = (iso) =>
+    Math.min(NWEEKS - 1, Math.max(0, Math.floor((new Date(iso).getTime() - fromMs) / (7 * 86400000))));
+
   // --- Global file churn -> hotspot set (top decile of touched files) ---
   const fileChurn = new Map();
   for (const pr of prs) {
@@ -177,6 +182,7 @@ async function main() {
         commentsReceived: 0,
         hotspotFiles: new Set(),
         workTypes: Object.fromEntries(WORK_TYPES.map((w) => [w, 0])),
+        weekly: new Array(NWEEKS).fill(0),
         prs: [],
       });
     }
@@ -211,6 +217,7 @@ async function main() {
     if (bug || test) a.qualityCount += 1;
 
     a.workTypes[classifyWorkType(pr)] += 1;
+    if (pr.mergedAt) a.weekly[weekOf(pr.mergedAt)] += 1;
 
     a.prs.push({
       number: pr.number,
@@ -283,7 +290,9 @@ async function main() {
         qualityCount: a.qualityCount,
         qualityShare: round((a.qualityCount / a.prCount) * 100),
         hotspotFiles: a.hotspotFiles.size,
+        perWeek: round(a.prCount / (meta.days / 7), 1),
       },
+      weekly: a.weekly,
       topSubsystems,
       topPRs,
       workMix,
@@ -291,6 +300,11 @@ async function main() {
   });
 
   engineers.sort((x, y) => y.score - x.score);
+  // benchmark framing: where each engineer sits among ranked contributors
+  engineers.forEach((e, i) => {
+    e.rank = i + 1;
+    e.topPercent = Math.max(1, Math.round(((i + 1) / engineers.length) * 100));
+  });
 
   // --- Team-wide work mix (across every human-authored merged PR) ---
   const teamCounts = Object.fromEntries(WORK_TYPES.map((w) => [w, 0]));
