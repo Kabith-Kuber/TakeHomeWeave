@@ -234,6 +234,16 @@ h3 {
   text-transform: uppercase;
   color: var(--muted);
 }
+.col-unit {
+  display: block;
+  margin-top: 3px;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--muted);
+  opacity: 0.8;
+}
 
 /* Top list */
 .top-list {
@@ -301,6 +311,12 @@ h3 {
   font-weight: 700;
   font-size: 15px;
   color: var(--accent);
+}
+.row-score-max {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-left: 1px;
 }
 .row-track {
   height: 5px;
@@ -887,6 +903,31 @@ h3 {
   color: var(--muted);
   line-height: 1.5;
   font-style: italic;
+}
+.ins-foot {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.ai-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.ai-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.ai-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  display: inline-block;
 }
 /* Questions card */
 .q-list {

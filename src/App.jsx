@@ -179,7 +179,9 @@ export default function App() {
 
       <main className="layout">
         <section className="list-col">
-          <div className="col-head">Top 5 by Visible Impact Score</div>
+          <div className="col-head">
+            Top 5 by Visible Impact Score <span className="col-unit">0–100, click a card for details</span>
+          </div>
           <ol className="top-list">
             {top5.map((e, i) => (
               <li
@@ -192,7 +194,10 @@ export default function App() {
                 <div className="row-body">
                   <div className="row-line">
                     <span className="row-name">{e.login}</span>
-                    <span className="row-score">{Math.round(e.liveScore)}</span>
+                    <span className="row-score" title="Visible Impact Score (0–100)">
+                      {Math.round(e.liveScore)}
+                      <span className="row-score-max">/100</span>
+                    </span>
                   </div>
                   <div className="row-track">
                     <div className="row-fill" style={{ width: `${mounted ? e.liveScore : 0}%` }} />
@@ -222,7 +227,9 @@ export default function App() {
                     <span className="also-rank">{i + 6}</span>
                     <span className="also-name">{e.login}</span>
                     <span className="also-style">{e.impactStyle}</span>
-                    <span className="also-score">{Math.round(e.liveScore)}</span>
+                    <span className="also-score" title="Visible Impact Score (0–100)">
+                      {Math.round(e.liveScore)}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -346,11 +353,12 @@ export default function App() {
               <h3>Where they worked</h3>
               <div className="tags">
                 {sel.topSubsystems.map((s) => (
-                  <span className="tag" key={s.dir}>
+                  <span className="tag" key={s.dir} title={`${s.count} files changed in ${s.dir}/`}>
                     {s.dir} <b>{s.count}</b>
                   </span>
                 ))}
               </div>
+              <p className="note">Number = files changed in that top-level area across their PRs.</p>
             </div>
             <div className="block">
               <h3>Evidence — notable PRs</h3>
@@ -472,10 +480,14 @@ function Insights({ data, top5 }) {
                 <div className="lev-track">
                   <div className="lev-fill" style={{ width: `${(e.stats.reviewsGiven / maxRev) * 100}%` }} />
                 </div>
-                <span className="lev-val">{e.stats.reviewsGiven}</span>
+                <span className="lev-val" title="PRs reviewed for teammates">{e.stats.reviewsGiven}</span>
               </div>
             ))}
           </div>
+          <p className="ins-foot">
+            Number = pull requests reviewed for teammates over the last {data.meta.days} days (own
+            PRs and bots excluded).
+          </p>
         </div>
 
         <div className="card insight">
@@ -494,6 +506,11 @@ function Insights({ data, top5 }) {
             <div className="ai-seg" style={{ width: `${auto.assistablePct}%`, background: "#ff6a00" }} />
             <div className="ai-seg" style={{ width: `${auto.standardPct}%`, background: "#6b7280" }} />
             <div className="ai-seg" style={{ width: `${auto.humanPct}%`, background: "#f87171" }} />
+          </div>
+          <div className="ai-legend">
+            <span><i style={{ background: "#ff6a00" }} />AI-assistable {auto.assistablePct}%</span>
+            <span><i style={{ background: "#6b7280" }} />standard {auto.standardPct}%</span>
+            <span><i style={{ background: "#f87171" }} />human-heavy {auto.humanPct}%</span>
           </div>
           <p className="disclaimer">
             Not actual AI attribution. A directional proxy based on public PR metadata (work type,
