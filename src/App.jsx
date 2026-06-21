@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 
 const DIMS = [
-  { key: "shipping", label: "Shipping", color: "#34e0a1" },
+  { key: "shipping", label: "Shipping", color: "#ff6a00" },
   { key: "collaboration", label: "Review Leverage", color: "#58a6ff" },
   { key: "breadth", label: "Area Ownership", color: "#22d3ee" },
-  { key: "quality", label: "Delivery Signal", color: "#fbbf24" },
+  { key: "quality", label: "Delivery Signal", color: "#facc15" },
   { key: "influence", label: "Scope Handled", color: "#a78bfa" },
 ];
 
@@ -17,22 +17,22 @@ const ANNOT = {
 };
 
 const WT_COLOR = {
-  Feature: "#34e0a1",
-  "Bug Fix": "#f87171",
+  Feature: "#ff6a00",
+  "Bug Fix": "#ef4444",
   Infrastructure: "#58a6ff",
   Refactor: "#a78bfa",
   Tests: "#2dd4bf",
-  Docs: "#fbbf24",
+  Docs: "#eab308",
   Maintenance: "#6b7280",
 };
 
 const STYLE_COLOR = {
-  "Product Shipper": "#34e0a1",
+  "Product Shipper": "#ff6a00",
   "Technical Multiplier": "#58a6ff",
   "Systems Owner": "#a78bfa",
   "Full-Stack Owner": "#22d3ee",
-  "Quality Improver": "#fbbf24",
-  "Area Specialist": "#f59e0b",
+  "Quality Improver": "#facc15",
+  "Area Specialist": "#fb923c",
   "Balanced Contributor": "#94a3b8",
 };
 
@@ -51,6 +51,35 @@ function whyText(eng) {
   return `Stands out for ${top.map((d) => d.label.toLowerCase()).join(" and ")} — ${ANNOT[top[0].key](eng)} and ${ANNOT[top[1].key](eng)}.`;
 }
 
+// Count a number up from 0 with an ease-out curve (for the stat cards).
+function useCountUp(target, duration = 1100) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    let raf;
+    let startTs;
+    const step = (ts) => {
+      if (!startTs) startTs = ts;
+      const p = Math.min(1, (ts - startTs) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setVal(Math.round(target * eased));
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration]);
+  return val;
+}
+
+// True shortly after mount, so width/opacity transitions animate in from 0.
+function useMounted(delay = 70) {
+  const [m, setM] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setM(true), delay);
+    return () => clearTimeout(t);
+  }, []);
+  return m;
+}
+
 export default function App() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -58,6 +87,7 @@ export default function App() {
   const [selected, setSelected] = useState(null);
   const [showMethod, setShowMethod] = useState(false);
   const [showTuner, setShowTuner] = useState(false);
+  const mounted = useMounted();
 
   useEffect(() => {
     fetch("impact.json")
@@ -82,6 +112,26 @@ export default function App() {
   const top5 = ranked.slice(0, 5);
   const runnersUp = ranked.slice(5, 10);
 
+  const insights = useMemo(() => {
+    if (!data || !ranked.length) return [];
+    const engs = data.engineers;
+    const pick = (sel) => [...engs].sort(sel)[0];
+    const byRev = pick((a, b) => b.stats.reviewsGiven - a.stats.reviewsGiven);
+    const byPR = pick((a, b) => b.stats.prCount - a.stats.prCount);
+    const byArea = pick((a, b) => b.stats.subsystemCount - a.stats.subsystemCount);
+    const team = data.meta.teamWorkMix[0];
+    const auto = data.meta.automation;
+    const lead = ranked[0];
+    return [
+      `${byRev.login} drives the most review leverage — ${byRev.stats.reviewsGiven} reviews on others' PRs.`,
+      `${byPR.login} shipped the most — ${byPR.stats.prCount} merged PRs in ${data.meta.days} days.`,
+      `Team work skews ${team.type} (${team.pct}%) over the last ${data.meta.days} days.`,
+      `~${auto.assistablePct}% of PRs look AI-assistable (docs, tests, small fixes) — directional proxy, not AI attribution.`,
+      `${byArea.login} has the broadest ownership — ${byArea.stats.subsystemCount} code areas touched.`,
+      `${lead.login} leads the Visible Impact Score at ${Math.round(lead.liveScore)}/100.`,
+    ];
+  }, [data, ranked]);
+
   useEffect(() => {
     if (top5.length && (!selected || !top5.find((e) => e.login === selected))) {
       setSelected(top5[0].login);
@@ -105,8 +155,8 @@ export default function App() {
             <span className="weave">· Weave-inspired</span>
           </div>
           <p className="tagline">
-            Who had the most visible engineering impact at PostHog in the last {m.days} days — and
-            what kind of impact it was.
+            <b>Engineering intelligence from public GitHub signals.</b> Who had the most visible
+            impact at PostHog in the last {m.days} days — and what kind of impact it was.
           </p>
           <div className="badges">
             <span className="badge">Open-source GitHub signal analysis</span>
@@ -119,10 +169,10 @@ export default function App() {
       </header>
 
       <div className="stats">
-        <StatCard value={m.totalMergedPRs.toLocaleString()} label="PRs analyzed" />
-        <StatCard value={m.contributorsAnalyzed.toLocaleString()} label="Engineers analyzed" />
-        <StatCard value={m.reviewsAnalyzed.toLocaleString()} label="Reviews analyzed" />
-        <StatCard value={m.codeAreas.toLocaleString()} label="Code areas detected" />
+        <StatCard target={m.totalMergedPRs} label="PRs analyzed" />
+        <StatCard target={m.contributorsAnalyzed} label="Engineers analyzed" />
+        <StatCard target={m.reviewsAnalyzed} label="Reviews analyzed" />
+        <StatCard target={m.codeAreas} label="Code areas detected" />
       </div>
 
       <TeamMix mix={m.teamWorkMix} />
@@ -145,7 +195,7 @@ export default function App() {
                     <span className="row-score">{Math.round(e.liveScore)}</span>
                   </div>
                   <div className="row-track">
-                    <div className="row-fill" style={{ width: `${e.liveScore}%` }} />
+                    <div className="row-fill" style={{ width: `${mounted ? e.liveScore : 0}%` }} />
                   </div>
                   <div className="row-lens">
                     <span className="style-chip" style={{ color: STYLE_COLOR[e.impactStyle], borderColor: STYLE_COLOR[e.impactStyle] }}>
@@ -254,7 +304,7 @@ export default function App() {
                     <div
                       className="bd-fill"
                       style={{
-                        width: `${sel.components[d.key].percentile}%`,
+                        width: `${mounted ? sel.components[d.key].percentile : 0}%`,
                         background: d.color,
                       }}
                     />
@@ -321,15 +371,43 @@ export default function App() {
 
       <Insights data={data} top5={top5} />
 
+      <WeaveInsight insights={insights} />
+
       {showMethod && <Methodology data={data} onClose={() => setShowMethod(false)} />}
     </div>
   );
 }
 
-function StatCard({ value, label }) {
+function WeaveInsight({ insights }) {
+  const [i, setI] = useState(0);
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    if (insights.length < 2) return;
+    const t = setInterval(() => setI((p) => (p + 1) % insights.length), 5000);
+    return () => clearInterval(t);
+  }, [insights.length]);
+  if (!open || !insights.length) return null;
+  return (
+    <div className="weave-insight">
+      <div className="wi-head">
+        <span className="wi-dot" /> Weave Insight
+        <button className="wi-close" onClick={() => setOpen(false)} aria-label="dismiss">×</button>
+      </div>
+      <div className="wi-body" key={i}>{insights[i]}</div>
+      <div className="wi-dots">
+        {insights.map((_, k) => (
+          <span key={k} className={`wi-pip ${k === i ? "on" : ""}`} onClick={() => setI(k)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ target, label }) {
+  const v = useCountUp(target);
   return (
     <div className="stat-card card">
-      <div className="stat-value">{value}</div>
+      <div className="stat-value">{v.toLocaleString()}</div>
       <div className="stat-label">{label}</div>
     </div>
   );
@@ -404,7 +482,7 @@ function Insights({ data, top5 }) {
           <h3>AI-Readiness Proxy</h3>
           <div className="ai-nums">
             <div>
-              <div className="ai-big" style={{ color: "#34e0a1" }}>{auto.assistablePct}%</div>
+              <div className="ai-big" style={{ color: "#ff6a00" }}>{auto.assistablePct}%</div>
               <div className="ai-cap">potentially AI-assistable</div>
             </div>
             <div>
@@ -413,7 +491,7 @@ function Insights({ data, top5 }) {
             </div>
           </div>
           <div className="ai-bar">
-            <div className="ai-seg" style={{ width: `${auto.assistablePct}%`, background: "#34e0a1" }} />
+            <div className="ai-seg" style={{ width: `${auto.assistablePct}%`, background: "#ff6a00" }} />
             <div className="ai-seg" style={{ width: `${auto.standardPct}%`, background: "#6b7280" }} />
             <div className="ai-seg" style={{ width: `${auto.humanPct}%`, background: "#f87171" }} />
           </div>
