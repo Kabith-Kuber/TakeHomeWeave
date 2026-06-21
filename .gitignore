@@ -4,3 +4,5 @@ dist
 .timer
 .DS_Store
 *.log
+*.png
+shot*.png
