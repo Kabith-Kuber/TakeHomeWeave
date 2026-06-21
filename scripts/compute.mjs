@@ -52,6 +52,76 @@ function isTestPR(pr) {
   );
 }
 
+// The seven work types we bucket every PR into (display order).
+const WORK_TYPES = [
+  "Feature",
+  "Bug Fix",
+  "Infrastructure",
+  "Refactor",
+  "Tests",
+  "Docs",
+  "Maintenance",
+];
+
+const isTestFile = (f) =>
+  /(^|\/)(tests?|__tests__|e2e|cypress)\//i.test(f) || /(\.test\.|\.spec\.|_test\.|test_)/i.test(f);
+const isDocFile = (f) => /\.mdx?$/i.test(f) || /(^|\/)docs?\//i.test(f) || /readme|changelog/i.test(f);
+const isInfraFile = (f) =>
+  /(^|\/)\.github\//i.test(f) ||
+  /(dockerfile|docker-compose)/i.test(f) ||
+  /\.(ya?ml|tf|toml|sh)$/i.test(f) ||
+  /(^|\/)(requirements[^/]*\.txt|package(-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|pyproject\.toml|Makefile)$/i.test(f);
+
+// Rule-based work-type classifier. Each PR is assigned ONE type so the per-engineer
+// mix sums to 100%. Priority: conventional-commit prefix -> labels -> title keywords
+// -> changed-file majority -> sensible default. Intentionally lightweight.
+function classifyWorkType(pr) {
+  const t = (pr.title || "").toLowerCase().trim();
+  const labels = pr.labels.map((l) => l.toLowerCase());
+  const files = pr.files || [];
+
+  const depsLike =
+    /\(deps(-dev)?\)|\bbump\b|\bdependabot\b|upgrade .+ to |update .+ (dependency|dependencies)|\bdeps\b/.test(t) ||
+    labels.some((l) => /dependen/.test(l));
+
+  // 1) conventional-commit prefix, e.g. "feat(scope):", "fix:", "chore!:"
+  const m = t.match(/^(\w+)(\([^)]*\))?!?:/);
+  const prefix = m ? m[1] : null;
+  if (prefix) {
+    if (prefix === "feat" || prefix === "feature") return "Feature";
+    if (prefix === "fix" || prefix === "bugfix" || prefix === "hotfix") return "Bug Fix";
+    if (prefix === "docs" || prefix === "doc") return "Docs";
+    if (prefix === "test" || prefix === "tests") return "Tests";
+    if (prefix === "refactor" || prefix === "perf" || prefix === "style") return "Refactor";
+    if (prefix === "ci" || prefix === "build" || prefix === "infra" || prefix === "deploy")
+      return "Infrastructure";
+    if (prefix === "chore") return depsLike ? "Infrastructure" : "Maintenance";
+  }
+
+  // 2) labels
+  if (labels.some((l) => /\bbug\b|regression|hotfix/.test(l))) return "Bug Fix";
+  if (labels.some((l) => /feature|enhancement/.test(l))) return "Feature";
+  if (labels.some((l) => /documentation|\bdocs\b/.test(l))) return "Docs";
+  if (depsLike) return "Infrastructure";
+
+  // 3) title keywords
+  if (/\bfix(es|ed)?\b|\bbug\b|\bregression\b/.test(t)) return "Bug Fix";
+  if (/\brefactor|clean ?up|\brename\b|simplif|\btidy\b|dedupe|deduplicat|\bmove\b/.test(t)) return "Refactor";
+  if (/\bdocs?\b|readme|changelog/.test(t)) return "Docs";
+
+  // 4) changed-file majority
+  if (files.length) {
+    const ratio = (pred) => files.filter(pred).length / files.length;
+    if (ratio(isTestFile) >= 0.6) return "Tests";
+    if (ratio(isDocFile) >= 0.6) return "Docs";
+    if (ratio(isInfraFile) >= 0.6) return "Infrastructure";
+  }
+
+  // 5) defaults
+  if (/\badd\b|\bsupport\b|\bintroduce\b|\bimplement\b|\benable\b|\bnew\b/.test(t)) return "Feature";
+  return "Maintenance";
+}
+
 // percentile rank (0-100) using average rank, robust to ties.
 function percentiles(values) {
   const n = values.length;
@@ -106,6 +176,7 @@ async function main() {
         reviewsReceived: 0,
         commentsReceived: 0,
         hotspotFiles: new Set(),
+        workTypes: Object.fromEntries(WORK_TYPES.map((w) => [w, 0])),
         prs: [],
       });
     }
@@ -138,6 +209,8 @@ async function main() {
     if (bug) a.bugfixCount += 1;
     if (test) a.testCount += 1;
     if (bug || test) a.qualityCount += 1;
+
+    a.workTypes[classifyWorkType(pr)] += 1;
 
     a.prs.push({
       number: pr.number,
@@ -183,6 +256,13 @@ async function main() {
     const topPRs = a.prs
       .sort((x, y) => y.reviewers - x.reviewers || y.loc - x.loc)
       .slice(0, 5);
+    const workMix = WORK_TYPES.map((type) => ({
+      type,
+      count: a.workTypes[type],
+      pct: round((a.workTypes[type] / a.prCount) * 100),
+    }))
+      .filter((w) => w.count > 0)
+      .sort((x, y) => y.count - x.count);
     return {
       login: a.login,
       avatar: `https://github.com/${a.login}.png?size=80`,
@@ -206,10 +286,25 @@ async function main() {
       },
       topSubsystems,
       topPRs,
+      workMix,
     };
   });
 
   engineers.sort((x, y) => y.score - x.score);
+
+  // --- Team-wide work mix (across every human-authored merged PR) ---
+  const teamCounts = Object.fromEntries(WORK_TYPES.map((w) => [w, 0]));
+  let teamTotal = 0;
+  for (const pr of prs) {
+    if (isBot(pr.author, pr.authorType)) continue;
+    teamCounts[classifyWorkType(pr)] += 1;
+    teamTotal += 1;
+  }
+  const teamWorkMix = WORK_TYPES.map((type) => ({
+    type,
+    count: teamCounts[type],
+    pct: round((teamCounts[type] / teamTotal) * 100),
+  })).sort((x, y) => y.count - x.count);
 
   const out = {
     meta: {
@@ -219,8 +314,10 @@ async function main() {
       minPRs: MIN_PRS,
       hotspotFiles: hotspots.size,
       hotspotThreshold,
+      teamWorkMix,
     },
     defaultWeights: DEFAULT_WEIGHTS,
+    workTypes: WORK_TYPES,
     dimensions: {
       shipping: "Log-dampened code volume across merged PRs (rewards shipping meaningful units, not raw LOC).",
       collaboration: "Reviews given on other engineers' PRs (unblocking & mentoring teammates).",

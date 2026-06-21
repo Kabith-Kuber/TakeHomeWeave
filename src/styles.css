@@ -101,6 +101,50 @@ h3 {
   text-decoration: underline;
 }
 
+/* Team mix strip */
+.teammix {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: var(--shadow);
+}
+.teammix-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.teammix-bar {
+  flex: 1;
+  display: flex;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  gap: 2px;
+}
+.tm-seg {
+  height: 100%;
+}
+.teammix-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+.tm-lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
 /* Layout */
 .layout {
   flex: 1;
@@ -337,23 +381,42 @@ h3 {
 .detail-name:hover {
   color: var(--accent);
 }
+.detail-id {
+  min-width: 0;
+}
 .detail-sub {
   color: var(--muted);
   margin-top: 3px;
   font-size: 13.5px;
 }
+.detail-quick {
+  color: var(--muted);
+  margin-top: 3px;
+  font-size: 12.5px;
+}
 .why {
   margin: 0;
-  font-size: 16px;
+  font-size: 15.5px;
   line-height: 1.5;
   color: var(--ink);
 }
 
-/* Breakdown */
-.breakdown {
+/* Two-column blocks */
+.two {
   border-top: 1px solid var(--line);
-  padding-top: 18px;
+  padding-top: 16px;
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 26px;
 }
+.two.bottom {
+  grid-template-columns: 1fr 1.25fr;
+}
+.block {
+  min-width: 0;
+}
+
+/* Breakdown */
 .bd-row {
   display: grid;
   grid-template-columns: 104px 1fr auto;
@@ -377,25 +440,84 @@ h3 {
   transition: width 0.25s ease;
 }
 .bd-annot {
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--muted);
   white-space: nowrap;
 }
-.bd-note {
-  margin: 12px 0 0;
-  font-size: 12.5px;
+.note {
+  margin: 10px 0 0;
+  font-size: 12px;
   color: var(--muted);
   line-height: 1.5;
 }
 
-/* Two columns */
-.cols {
-  border-top: 1px solid var(--line);
-  padding-top: 18px;
-  display: grid;
-  grid-template-columns: 1fr 1.25fr;
-  gap: 26px;
+/* Work type mix */
+.mix {
+  display: flex;
+  align-items: center;
+  gap: 18px;
 }
+.donut {
+  flex-shrink: 0;
+}
+.donut-num {
+  font-size: 17px;
+  font-weight: 700;
+  fill: var(--ink);
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+.donut-cap {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  fill: var(--muted);
+  text-anchor: middle;
+  dominant-baseline: middle;
+  text-transform: uppercase;
+}
+.mix-legend {
+  flex: 1;
+  min-width: 0;
+}
+.mix-summary {
+  font-size: 13.5px;
+  margin-bottom: 8px;
+}
+.lg-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 2px 0;
+}
+.lg-name {
+  flex: 1;
+}
+.lg-pct {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Row work-type tags */
+.row-types {
+  display: flex;
+  gap: 12px;
+  margin-top: 7px;
+}
+.rt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.dot.sm {
+  width: 7px;
+  height: 7px;
+}
+
+/* Subsystems + PRs */
 .tags {
   display: flex;
   flex-wrap: wrap;

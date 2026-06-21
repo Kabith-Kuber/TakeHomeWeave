@@ -16,6 +16,16 @@ const ANNOT = {
   influence: (e) => `${e.stats.hotspotFiles} high-churn files`,
 };
 
+const WT_COLOR = {
+  Feature: "#f54e00",
+  "Bug Fix": "#d4334a",
+  Infrastructure: "#2563eb",
+  Refactor: "#7c3aed",
+  Tests: "#0d9488",
+  Docs: "#c98a00",
+  Maintenance: "#8a8780",
+};
+
 function scoreFor(eng, weights) {
   const total = DIMS.reduce((s, d) => s + (weights[d.key] || 0), 0) || 1;
   return DIMS.reduce(
@@ -29,6 +39,11 @@ function whyText(eng) {
     .sort((a, b) => eng.components[b.key].percentile - eng.components[a.key].percentile)
     .slice(0, 2);
   return `Stands out for ${top.map((d) => d.label.toLowerCase()).join(" and ")} — ${ANNOT[top[0].key](eng)} and ${ANNOT[top[1].key](eng)}.`;
+}
+
+function mixText(eng) {
+  const top = eng.workMix.slice(0, 2);
+  return top.map((w) => `${w.type} ${w.pct}%`).join(", ");
 }
 
 export default function App() {
@@ -96,6 +111,8 @@ export default function App() {
         </div>
       </header>
 
+      <TeamMix mix={m.teamWorkMix} />
+
       <main className="layout">
         <section className="list-col">
           <ol className="top-list">
@@ -113,10 +130,15 @@ export default function App() {
                     <span className="row-score">{Math.round(e.liveScore)}</span>
                   </div>
                   <div className="row-track">
-                    <div
-                      className="row-fill"
-                      style={{ width: `${e.liveScore}%` }}
-                    />
+                    <div className="row-fill" style={{ width: `${e.liveScore}%` }} />
+                  </div>
+                  <div className="row-types">
+                    {e.workMix.slice(0, 2).map((w) => (
+                      <span key={w.type} className="rt">
+                        <span className="dot sm" style={{ background: WT_COLOR[w.type] }} />
+                        {w.type}
+                      </span>
+                    ))}
                   </div>
                 </div>
               </li>
@@ -174,43 +196,68 @@ export default function App() {
         <section className="detail-col">
           <div className="detail-top">
             <img className="detail-av" src={sel.avatar} alt="" />
-            <div>
+            <div className="detail-id">
               <a className="detail-name" href={sel.profile} target="_blank" rel="noreferrer">
                 {sel.login}
               </a>
               <div className="detail-sub">
                 Rank #{selRank} · Impact score {Math.round(sel.liveScore)} / 100
               </div>
+              <div className="detail-quick">
+                {sel.stats.prCount} PRs · {sel.stats.reviewsGiven} reviews given ·{" "}
+                {sel.stats.reviewsReceived} received · {sel.stats.subsystemCount} subsystems
+              </div>
             </div>
           </div>
 
           <p className="why">{whyText(sel)}</p>
 
-          <div className="breakdown">
-            <h3>Why — impact breakdown</h3>
-            {DIMS.map((d) => (
-              <div className="bd-row" key={d.key}>
-                <span className="bd-label">{d.label}</span>
-                <div className="bd-track">
-                  <div
-                    className="bd-fill"
-                    style={{
-                      width: `${sel.components[d.key].percentile}%`,
-                      background: d.color,
-                    }}
-                  />
+          <div className="two">
+            <div className="block">
+              <h3>Why — impact breakdown</h3>
+              {DIMS.map((d) => (
+                <div className="bd-row" key={d.key}>
+                  <span className="bd-label">{d.label}</span>
+                  <div className="bd-track">
+                    <div
+                      className="bd-fill"
+                      style={{
+                        width: `${sel.components[d.key].percentile}%`,
+                        background: d.color,
+                      }}
+                    />
+                  </div>
+                  <span className="bd-annot">{ANNOT[d.key](sel)}</span>
                 </div>
-                <span className="bd-annot">{ANNOT[d.key](sel)}</span>
+              ))}
+              <p className="note">
+                Bars = percentile vs. the {m.qualifiedContributors} ranked contributors.
+              </p>
+            </div>
+
+            <div className="block">
+              <h3>What kind of work</h3>
+              <div className="mix">
+                <Donut segments={sel.workMix} />
+                <div className="mix-legend">
+                  <div className="mix-summary">
+                    Mostly <b>{sel.workMix[0]?.type}</b>
+                    {sel.workMix[1] ? <> &amp; <b>{sel.workMix[1].type}</b></> : null}
+                  </div>
+                  {sel.workMix.slice(0, 5).map((w) => (
+                    <div className="lg-row" key={w.type}>
+                      <span className="dot" style={{ background: WT_COLOR[w.type] }} />
+                      <span className="lg-name">{w.type}</span>
+                      <span className="lg-pct">{w.pct}%</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
-            <p className="bd-note">
-              Bars show each engineer’s percentile vs. the {m.qualifiedContributors} ranked
-              contributors. The score is the weighted average of these five.
-            </p>
+            </div>
           </div>
 
-          <div className="cols">
-            <div>
+          <div className="two bottom">
+            <div className="block">
               <h3>Where they worked</h3>
               <div className="tags">
                 {sel.topSubsystems.map((s) => (
@@ -220,13 +267,13 @@ export default function App() {
                 ))}
               </div>
             </div>
-            <div>
+            <div className="block">
               <h3>Notable PRs</h3>
               <ul className="prs">
                 {sel.topPRs.map((p) => (
                   <li key={p.number}>
                     <a href={p.url} target="_blank" rel="noreferrer" title={p.title}>
-                      {trim(p.title, 56)}
+                      {trim(p.title, 52)}
                     </a>
                     <span className="pr-meta">{p.reviewers} reviews</span>
                   </li>
@@ -239,6 +286,68 @@ export default function App() {
 
       {showMethod && <Methodology data={data} onClose={() => setShowMethod(false)} />}
     </div>
+  );
+}
+
+function TeamMix({ mix }) {
+  const shown = mix.filter((w) => w.pct >= 1);
+  return (
+    <div className="teammix">
+      <span className="teammix-label">What the team shipped</span>
+      <div className="teammix-bar">
+        {shown.map((w) => (
+          <div
+            key={w.type}
+            className="tm-seg"
+            style={{ width: `${w.pct}%`, background: WT_COLOR[w.type] }}
+            title={`${w.type}: ${w.pct}%`}
+          />
+        ))}
+      </div>
+      <div className="teammix-legend">
+        {shown.map((w) => (
+          <span key={w.type} className="tm-lg">
+            <span className="dot sm" style={{ background: WT_COLOR[w.type] }} />
+            {w.type} {w.pct}%
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Donut({ segments, size = 116, stroke = 20 }) {
+  const total = segments.reduce((s, w) => s + w.count, 0) || 1;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  let acc = 0;
+  const top = segments[0];
+  return (
+    <svg className="donut" width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#efece6" strokeWidth={stroke} />
+        {segments.map((w) => {
+          const frac = w.count / total;
+          const el = (
+            <circle
+              key={w.type}
+              cx={size / 2}
+              cy={size / 2}
+              r={r}
+              fill="none"
+              stroke={WT_COLOR[w.type]}
+              strokeWidth={stroke}
+              strokeDasharray={`${frac * c} ${c}`}
+              strokeDashoffset={-acc * c}
+            />
+          );
+          acc += frac;
+          return el;
+        })}
+      </g>
+      <text x="50%" y="46%" className="donut-num">{top?.pct}%</text>
+      <text x="50%" y="62%" className="donut-cap">{top?.type}</text>
+    </svg>
   );
 }
 
@@ -270,9 +379,11 @@ function Methodology({ data, onClose }) {
           ))}
         </ul>
         <p className="modal-p muted small">
-          Bots are excluded; reviews are only counted on other people’s PRs. “High-churn files”
-          are the {data.meta.hotspotFiles.toLocaleString()} files most frequently changed in the
-          window. Use “Adjust what counts” to re-weight the signals yourself.
+          <b>Work type</b> classifies each PR into one of {data.workTypes.length} buckets
+          (Feature, Bug Fix, Infrastructure, Refactor, Tests, Docs, Maintenance) from its
+          conventional-commit prefix, labels, and changed files — so you see not just who had
+          impact, but what kind. Bots are excluded; reviews are only counted on other people’s
+          PRs. Use “Adjust what counts” to re-weight the signals yourself.
         </p>
       </div>
     </div>

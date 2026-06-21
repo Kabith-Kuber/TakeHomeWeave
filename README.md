@@ -40,20 +40,40 @@ component scores, plus links to their most-reviewed PRs so a leader can validate
 The **weight sliders** let you re-weight the dimensions live and pressure-test who rises to
 the top.
 
+## Work Type Mix — *what kind* of impact
+
+Impact answers *who* and *how much*; the **Work Type Mix** answers **what kind**. Every PR is
+classified into one of seven buckets with a lightweight, rule-based classifier (no ML), using
+a clear priority order:
+
+1. **Conventional-commit prefix** in the title (`feat:` → Feature, `fix:` → Bug Fix,
+   `refactor:`/`perf:` → Refactor, `docs:` → Docs, `test:` → Tests, `ci:`/`build:` →
+   Infrastructure, `chore:` → Maintenance, `chore(deps)` → Infrastructure)
+2. **Labels** (e.g. `bug`, `enhancement`, `documentation`, `dependencies`)
+3. **Title keywords** (fix / refactor / cleanup / docs …)
+4. **Changed-file majority** (mostly `tests/` → Tests, mostly `docs/`/`*.md` → Docs, mostly
+   CI/Docker/lockfiles → Infrastructure)
+5. Sensible default (Feature if it reads like new functionality, else Maintenance)
+
+Each PR gets exactly **one** type, so an engineer's mix sums to 100%. The dashboard shows each
+engineer's mix as a **donut + top-2 summary** ("Mostly Feature & Bug Fix"), and a team-wide
+**"What the team shipped"** strip gives the leader an at-a-glance picture of where effort went.
+
 ## Architecture
 
-```
-scripts/fetch.mjs    -> pulls 90 days of merged PRs from the GitHub GraphQL API
-                        (via the authenticated gh CLI), writing data/raw-prs.json.
-                        Adaptively splits any date window that exceeds GitHub's
-                        1000-result search cap so no PRs are dropped.
-scripts/compute.mjs  -> aggregates per author, computes the 5 dimensions,
-                        percentile-normalizes, weights, and writes public/impact.json.
-src/                 -> Vite + React + Recharts dashboard that reads the static JSON.
+```mermaid
+flowchart LR
+  gh["GitHub GraphQL API<br/>(PostHog/posthog)"] -->|"merged PRs, 90d<br/>diff stats, files,<br/>reviews, labels"| fetch["scripts/fetch.mjs<br/>adaptive date windows"]
+  fetch -->|"data/raw-prs.json<br/>9,066 PRs"| compute["scripts/compute.mjs"]
+  compute -->|"5 impact dimensions<br/>+ work-type mix<br/>+ percentile ranks"| json["public/impact.json<br/>(~200 KB static)"]
+  json --> ui["Vite + React dashboard<br/>leaderboard · breakdown<br/>· donut · weight sliders"]
+  ui --> user["Engineering leader"]
 ```
 
-Data is **pre-computed into a static JSON** and baked into the build, so the dashboard makes
-zero API calls at load time and renders in well under a second.
+Two clean stages: a **fetch** step (network) and a pure **compute** step (deterministic), so
+the model can be re-tuned instantly without re-hitting the API. Data is **pre-computed into a
+static JSON** and baked into the build, so the dashboard makes zero API calls at load time and
+renders in well under a second.
 
 ## Reproduce
 
@@ -66,7 +86,8 @@ npm run dev            # or: npm run build && npm run preview
 
 ## Tech stack
 
-Vite, React, Recharts. Data pipeline in Node using the GitHub GraphQL API. Hosted on Vercel.
+Vite + React for the UI (charts are hand-rolled inline SVG/CSS — no chart library, ~48 KB
+gzipped). Data pipeline in Node using the GitHub GraphQL API via the `gh` CLI. Hosted on Vercel.
 
 ## Time spent
 
