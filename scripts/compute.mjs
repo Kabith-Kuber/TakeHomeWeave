@@ -123,6 +123,77 @@ function classifyWorkType(pr) {
   return "Maintenance";
 }
 
+// --- Impact-style classification (rule-based "Impact Lens") ---
+const FRONTEND_DIRS = new Set(["frontend"]);
+const BACKEND_DIRS = new Set([
+  "posthog", "ee", "rust", "plugin-server", "dags", "bin", "hogvm", "livestream", "common",
+]);
+const SECURITY_RE = /(auth|security|permission|login|oauth|crypto|secret|saml|sso|token|password|rbac)/i;
+const PIPELINE_DIRS = new Set(["dags", "clickhouse", "kafka", "plugin-server"]);
+
+const TAKEAWAY = {
+  "Product Shipper": "Strong direct shipper with broad product ownership.",
+  "Technical Multiplier": "High collaboration leverage through review and discussion.",
+  "Systems Owner": "Core systems contributor with meaningful backend scope.",
+  "Full-Stack Owner": "Ships across both frontend and backend surfaces.",
+  "Quality Improver": "Keeps the codebase healthy via fixes, tests, and refactors.",
+  "Area Specialist": "Deep, concentrated ownership of one area of the codebase.",
+  "Balanced Contributor": "Balanced contributor across shipping, review, and ownership.",
+};
+
+function computeLens(a, components, workMix) {
+  const subEntries = [...a.subsystems.entries()];
+  const subTotal = subEntries.reduce((s, [, c]) => s + c, 0) || 1;
+  const shareOf = (pred) =>
+    subEntries.filter(([d]) => pred(d)).reduce((s, [, c]) => s + c, 0) / subTotal;
+  const frontendShare = shareOf((d) => FRONTEND_DIRS.has(d));
+  const backendShare = shareOf((d) => BACKEND_DIRS.has(d));
+  const topShare = subEntries.length ? Math.max(...subEntries.map(([, c]) => c)) / subTotal : 0;
+
+  const wt = Object.fromEntries(workMix.map((w) => [w.type, w.pct]));
+  const featurePct = wt["Feature"] || 0;
+  const qualityPct = (wt["Bug Fix"] || 0) + (wt["Tests"] || 0) + (wt["Refactor"] || 0);
+  const col = components.collaboration.percentile;
+  const shp = components.shipping.percentile;
+  const brd = components.breadth.percentile;
+
+  let style;
+  if (col >= 75 && a.reviewsGiven >= a.prCount * 0.8) style = "Technical Multiplier";
+  else if (featurePct >= 40 && shp >= 65) style = "Product Shipper";
+  else if (frontendShare >= 0.25 && backendShare >= 0.25) style = "Full-Stack Owner";
+  else if (backendShare >= 0.55) style = "Systems Owner";
+  else if (qualityPct >= 50) style = "Quality Improver";
+  else if (topShare >= 0.55 && brd < 50) style = "Area Specialist";
+  else style = "Balanced Contributor";
+
+  let confidence;
+  if (a.prCount >= 20 && a.reviewsGiven >= 10 && a.prs.length >= 3) confidence = "High";
+  else if (a.prCount >= 8) confidence = "Medium";
+  else confidence = "Low";
+
+  return { impactStyle: style, takeaway: TAKEAWAY[style], confidence };
+}
+
+// --- AI-readiness proxy (NOT real AI attribution; directional only) ---
+function classifyAutomation(pr) {
+  const loc = pr.additions + pr.deletions;
+  const cf = pr.changedFiles;
+  const wtype = classifyWorkType(pr);
+
+  // Likely needs deeper human judgment
+  if (loc >= 800 || cf >= 25) return "human";
+  if (SECURITY_RE.test(pr.title) || pr.files.some((f) => SECURITY_RE.test(f))) return "human";
+  if (wtype === "Feature" && loc >= 300) return "human";
+  if (pr.files.some((f) => PIPELINE_DIRS.has(topDir(f))) && loc >= 200) return "human";
+
+  // Potentially AI-assistable (repetitive / well-scoped)
+  if (wtype === "Docs" || wtype === "Tests" || wtype === "Maintenance") return "assistable";
+  if (wtype === "Refactor" && loc <= 150) return "assistable";
+  if (wtype === "Bug Fix" && loc <= 80 && cf <= 3) return "assistable";
+
+  return "standard";
+}
+
 // percentile rank (0-100) using average rank, robust to ties.
 function percentiles(values) {
   const n = values.length;
@@ -152,8 +223,12 @@ async function main() {
 
   // --- Global file churn -> hotspot set (top decile of touched files) ---
   const fileChurn = new Map();
+  const codeAreas = new Set();
   for (const pr of prs) {
-    for (const f of pr.files) fileChurn.set(f, (fileChurn.get(f) ?? 0) + 1);
+    for (const f of pr.files) {
+      fileChurn.set(f, (fileChurn.get(f) ?? 0) + 1);
+      codeAreas.add(topDir(f));
+    }
   }
   const churnValues = [...fileChurn.values()].sort((a, b) => a - b);
   // hotspot = files in the top 10% by churn (and touched by >1 PR)
@@ -164,6 +239,7 @@ async function main() {
   );
 
   // --- Per-author aggregation ---
+  let teamReviews = 0;
   const A = new Map();
   const ensure = (login) => {
     if (!A.has(login)) {
@@ -195,6 +271,7 @@ async function main() {
       (r) => !isBot(r) && r !== pr.author
     );
     for (const r of reviewers) ensure(r).reviewsGiven += 1;
+    teamReviews += reviewers.length;
 
     if (isBot(pr.author, pr.authorType)) continue;
     const a = ensure(pr.author);
@@ -270,6 +347,7 @@ async function main() {
     }))
       .filter((w) => w.count > 0)
       .sort((x, y) => y.count - x.count);
+    const lens = computeLens(a, components, workMix);
     return {
       login: a.login,
       avatar: `https://github.com/${a.login}.png?size=80`,
@@ -296,6 +374,7 @@ async function main() {
       topSubsystems,
       topPRs,
       workMix,
+      ...lens,
     };
   });
 
@@ -306,12 +385,14 @@ async function main() {
     e.topPercent = Math.max(1, Math.round(((i + 1) / engineers.length) * 100));
   });
 
-  // --- Team-wide work mix (across every human-authored merged PR) ---
+  // --- Team-wide work mix + AI-readiness proxy (across every human-authored PR) ---
   const teamCounts = Object.fromEntries(WORK_TYPES.map((w) => [w, 0]));
+  const auto = { assistable: 0, human: 0, standard: 0 };
   let teamTotal = 0;
   for (const pr of prs) {
     if (isBot(pr.author, pr.authorType)) continue;
     teamCounts[classifyWorkType(pr)] += 1;
+    auto[classifyAutomation(pr)] += 1;
     teamTotal += 1;
   }
   const teamWorkMix = WORK_TYPES.map((type) => ({
@@ -319,6 +400,15 @@ async function main() {
     count: teamCounts[type],
     pct: round((teamCounts[type] / teamTotal) * 100),
   })).sort((x, y) => y.count - x.count);
+  const automation = {
+    total: teamTotal,
+    assistable: auto.assistable,
+    human: auto.human,
+    standard: auto.standard,
+    assistablePct: round((auto.assistable / teamTotal) * 100),
+    humanPct: round((auto.human / teamTotal) * 100),
+    standardPct: round((auto.standard / teamTotal) * 100),
+  };
 
   const out = {
     meta: {
@@ -329,15 +419,18 @@ async function main() {
       hotspotFiles: hotspots.size,
       hotspotThreshold,
       teamWorkMix,
+      automation,
+      reviewsAnalyzed: teamReviews,
+      codeAreas: codeAreas.size,
     },
     defaultWeights: DEFAULT_WEIGHTS,
     workTypes: WORK_TYPES,
     dimensions: {
-      shipping: "Log-dampened code volume across merged PRs (rewards shipping meaningful units, not raw LOC).",
-      collaboration: "Reviews given on other engineers' PRs (unblocking & mentoring teammates).",
-      breadth: "Distinct subsystems (top-level repo directories) touched (cross-cutting reach).",
-      quality: "Number of bug-fix / test PRs (keeping the codebase healthy).",
-      influence: "Distinct repo hotspot files touched (work on high-churn, central code).",
+      shipping: "Shipping — log-dampened code volume across merged PRs (visible shipped work, not raw LOC).",
+      collaboration: "Review Leverage — reviews given on other engineers' PRs (multiplying the output of others).",
+      breadth: "Area Ownership — distinct code areas (top-level directories) touched (cross-cutting reach).",
+      quality: "Delivery Signal — share of bug-fix / test PRs (keeping delivery healthy, not just adding features).",
+      influence: "Scope Handled — distinct high-churn core files touched (work on central, high-traffic code).",
     },
     engineers,
   };

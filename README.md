@@ -20,11 +20,14 @@ of value an engineer creates:
 
 | Dimension | Default weight | Raw signal | Why it matters |
 |---|---|---|---|
-| **Shipping** | 25% | Log-dampened code volume across merged PRs | Throughput of completed work, with a log scale so large mechanical diffs don't dominate |
-| **Collaboration** | 25% | Reviews given on *other people's* PRs | Unblocking and mentoring teammates — a force multiplier raw stats miss |
-| **Breadth** | 15% | Distinct subsystems (top-level dirs) touched | Cross-cutting reach vs. siloed work |
-| **Quality** | 15% | Count of bug-fix / test PRs | Keeping the codebase healthy, not just adding features |
-| **Influence** | 20% | Distinct repo "hotspot" (high-churn) files touched | Working on the central, high-traffic code others depend on |
+| **Shipping** | 25% | Log-dampened code volume across merged PRs | Visible shipped work, with a log scale so large mechanical diffs don't dominate |
+| **Review Leverage** | 25% | Reviews given on *other people's* PRs | Engineers who multiply the output of others — a force multiplier raw stats miss |
+| **Area Ownership** | 15% | Distinct code areas (top-level dirs) touched | Cross-cutting reach vs. siloed work |
+| **Delivery Signal** | 15% | Share of bug-fix / test PRs | Keeping delivery healthy, not just adding features |
+| **Scope Handled** | 20% | Distinct "hotspot" (high-churn) core files touched | Working on the central, high-traffic code others depend on |
+
+These five blend into a single **Visible Impact Score (0–100)** — a Weave-inspired "normalized
+unit" of visible engineering work, not a line-count.
 
 ### How the score is computed
 
@@ -59,6 +62,27 @@ Each PR gets exactly **one** type, so an engineer's mix sums to 100%. The dashbo
 engineer's mix as a **donut + top-2 summary** ("Mostly Feature & Bug Fix"), and a team-wide
 **"What the team shipped"** strip gives the leader an at-a-glance picture of where effort went.
 
+## Impact Lens & Leadership Insights
+
+Beyond the ranking, the dashboard answers *what kind* of impact each person has and *what is
+happening inside the team* — closer to how an engineering-intelligence tool thinks:
+
+- **Impact Lens** (per engineer): a rule-based archetype (Product Shipper, Technical Multiplier,
+  Systems Owner, Full-Stack Owner, Quality Improver, Area Specialist, Balanced Contributor), a
+  one-line leadership takeaway, and a **confidence badge** (High / Medium / Low) based on how much
+  public evidence backs the call.
+- **Work Type Mix**: every PR is bucketed into Feature / Bug Fix / Infrastructure / Refactor /
+  Tests / Docs / Maintenance, shown per engineer and team-wide.
+- **Review Leverage**: who unblocks the team most through reviews on others' PRs.
+- **AI-Readiness Proxy**: a *directional* split of work that looks repetitive/well-scoped
+  (potentially AI-assistable) vs. judgment-heavy (large, security-sensitive, architectural).
+  **This is not AI attribution** — public GitHub data can't prove AI usage — it's a proxy from PR
+  metadata (work type, size, files touched), clearly labelled as such in the UI.
+
+Honesty is built into the copy throughout: "visible impact", "public GitHub signal",
+"directional", "proxy", and an explicit note that this is **not a performance review** and can't
+see private mentoring, planning, design, incidents, or Slack help.
+
 ## Benchmarking & trends
 
 Impact is only meaningful relative to peers and over time, so the dashboard adds:
@@ -71,12 +95,12 @@ Impact is only meaningful relative to peers and over time, so the dashboard adds
 
 ## Future work (with richer data)
 
-The most valuable extension, and the natural next step for an engineering-intelligence tool,
-is **AI vs. human contribution** — attributing how much of each engineer's output was
-AI-assisted (Cursor / Copilot / Claude). That can't be inferred reliably from public GitHub
-data alone (it needs commit co-author trailers or editor telemetry), so rather than guess, it
-is intentionally left out here. With that signal, the same percentile/benchmark approach would
-extend cleanly to an "augmented output" dimension.
+The dashboard ships an **AI-readiness *proxy*** (directional, from PR metadata), but real
+**AI vs. human attribution** — how much of each engineer's output was actually AI-assisted
+(Cursor / Copilot / Claude) — can't be inferred from public GitHub data alone; it needs commit
+co-author trailers or editor telemetry. Rather than guess, that is left as the natural next step.
+With that signal, the same percentile/benchmark approach would extend cleanly to an "augmented
+output" dimension.
 
 ## Architecture
 
